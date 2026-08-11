@@ -1,4 +1,4 @@
-module github.com/ThalesGroup/crypto11
+module github.com/ad3n/crypto
 
 go 1.25.0
 
