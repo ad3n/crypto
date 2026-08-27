@@ -78,6 +78,18 @@ go env -w CGO_ENABLED=1
 go build
 ```
 
+Performance benchmarks
+----------------------
+
+Run the allocation-sensitive microbenchmarks with:
+
+```sh
+go test -run '^$' -bench 'Benchmark(CKULong|PSSParameter)' -benchmem ./...
+```
+
+`TestCKULongAllocationBudgets` also enforces the zero-allocation paths and the
+single-allocation RSA-PSS parameter encoding during regular test runs.
+
 Testing Guidance
 ================
 
