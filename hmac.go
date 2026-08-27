@@ -61,23 +61,23 @@ type hmacImplementation struct {
 	// Signing key
 	key *SecretKey
 
+	// Cleanup function
+	cleanup func()
+
+	// PKCS#11 mechanism information
+	mechDescription []*pkcs11.Mechanism
+
+	// Result, or nil if we don't have the answer yet
+	result []byte
+
 	// Hash size
 	size int
 
 	// Block size
 	blockSize int
 
-	// PKCS#11 mechanism information
-	mechDescription []*pkcs11.Mechanism
-
-	// Cleanup function
-	cleanup func()
-
 	// Count of updates
 	updates uint64
-
-	// Result, or nil if we don't have the answer yet
-	result []byte
 }
 
 type hmacInfo struct {

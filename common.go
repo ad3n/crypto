@@ -24,48 +24,61 @@ package crypto11
 import (
 	"C"
 	"encoding/asn1"
+	"encoding/binary"
 	"math/big"
-	"unsafe"
 
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
 
 func ulongToBytes(n uint) []byte {
-	return C.GoBytes(unsafe.Pointer(&n), C.sizeof_ulong) // ugh!
+	result := make([]byte, C.sizeof_ulong)
+	putUlong(result, n)
+	return result
+}
+
+// ulongsToBytes encodes several CK_ULONG values with one allocation. PKCS#11
+// mechanism parameters are short-lived and must not be retained in a global
+// pool because they may contain cryptographic metadata.
+func ulongsToBytes(values ...uint) []byte {
+	size := int(C.sizeof_ulong)
+	result := make([]byte, size*len(values))
+	for i, value := range values {
+		putUlong(result[i*size:], value)
+	}
+	return result
+}
+
+func putUlong(dst []byte, n uint) {
+	switch C.sizeof_ulong {
+	case 4:
+		binary.NativeEndian.PutUint32(dst, uint32(n))
+	case 8:
+		binary.NativeEndian.PutUint64(dst, uint64(n))
+	default:
+		panic("unsupported CK_ULONG size")
+	}
 }
 
 func bytesToUlong(bs []byte) (n uint) {
-	sliceSize := len(bs)
-	if sliceSize == 0 {
+	if len(bs) == 0 {
 		return 0
 	}
 
-	value := *(*uint)(unsafe.Pointer(&bs[0]))
-	if sliceSize > C.sizeof_ulong {
-		return value
+	// Attribute values can be shorter than CK_ULONG. Copying into a fixed-size
+	// local buffer avoids the out-of-bounds read performed by the old unsafe
+	// conversion while preserving native-endian PKCS#11 encoding.
+	size := min(len(bs), int(C.sizeof_ulong))
+	var buf [8]byte
+	copy(buf[:size], bs[:size])
+	switch C.sizeof_ulong {
+	case 4:
+		return uint(binary.NativeEndian.Uint32(buf[:4]))
+	case 8:
+		return uint(binary.NativeEndian.Uint64(buf[:8]))
+	default:
+		panic("unsupported CK_ULONG size")
 	}
-
-	// truncate the value to the # of bits present in the byte slice since
-	// the unsafe pointer will always grab/convert ULONG # of bytes
-	var mask uint
-	for i := 0; i < sliceSize; i++ {
-		mask |= 0xff << uint(i*8)
-	}
-	return value & mask
-}
-
-func concat(slices ...[]byte) []byte {
-	n := 0
-	for _, slice := range slices {
-		n += len(slice)
-	}
-	r := make([]byte, n)
-	n = 0
-	for _, slice := range slices {
-		n += copy(r[n:], slice)
-	}
-	return r
 }
 
 // Representation of a *DSA signature

@@ -69,7 +69,7 @@ func findKeysWithAttributes(session *pkcs11Session, template []*pkcs11.Attribute
 // Find key objects.  For asymmetric keys this only finds one half so
 // callers will call it twice. Returns nil if the key does not exist on the token.
 func findKeys(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (handles []pkcs11.ObjectHandle, err error) {
-	var template []*pkcs11.Attribute
+	template := make([]*pkcs11.Attribute, 0, 4)
 
 	if keyclass != nil {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, *keyclass))
@@ -696,7 +696,7 @@ func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []Attribu
 // If the key is asymmetric, then the attributes are retrieved from the private half.
 //
 // If the object is not a crypto11 key or keypair then an error is returned.
-func (c *Context) GetAttributes(key interface{}, attributes []AttributeType) (a AttributeSet, err error) {
+func (c *Context) GetAttributes(key any, attributes []AttributeType) (a AttributeSet, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
@@ -723,7 +723,7 @@ func (c *Context) GetAttributes(key interface{}, attributes []AttributeType) (a 
 // If the key is asymmetric, then the attribute is retrieved from the private half.
 //
 // If the object is not a crypto11 key or keypair then an error is returned.
-func (c *Context) GetAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
+func (c *Context) GetAttribute(key any, attribute AttributeType) (a *Attribute, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
@@ -739,7 +739,7 @@ func (c *Context) GetAttribute(key interface{}, attribute AttributeType) (a *Att
 // GetPubAttributes gets the values of the specified attributes on the public half of the given keypair.
 //
 // If the object is not a crypto11 keypair then an error is returned.
-func (c *Context) GetPubAttributes(key interface{}, attributes []AttributeType) (a AttributeSet, err error) {
+func (c *Context) GetPubAttributes(key any, attributes []AttributeType) (a AttributeSet, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
@@ -763,7 +763,7 @@ func (c *Context) GetPubAttributes(key interface{}, attributes []AttributeType) 
 // GetPubAttribute gets the value of the specified attribute on the public half of the given key.
 //
 // If the object is not a crypto11 keypair then an error is returned.
-func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
+func (c *Context) GetPubAttribute(key any, attribute AttributeType) (a *Attribute, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}

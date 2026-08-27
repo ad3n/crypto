@@ -93,14 +93,14 @@ type blockModeCloser struct {
 	// PKCS#11 session to use
 	session *pkcs11Session
 
+	// Cleanup function
+	cleanup func()
+
 	// Cipher block size
 	blockSize int
 
 	// modeDecrypt or modeEncrypt
 	mode int
-
-	// Cleanup function
-	cleanup func()
 }
 
 // newBlockModeCloser creates a new blockModeCloser for the chosen mechanism and mode.
@@ -140,8 +140,8 @@ func (key *SecretKey) newBlockModeCloser(mech uint, mode int, iv []byte, setFina
 	return bmc, nil
 }
 
-func finalizeBlockModeCloser(obj interface{}) {
-	obj.(*blockModeCloser).Close()
+func finalizeBlockModeCloser(obj *blockModeCloser) {
+	obj.Close()
 }
 
 func (bmc *blockModeCloser) BlockSize() int {

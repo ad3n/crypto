@@ -142,12 +142,12 @@ func (o *pkcs11Object) Delete() error {
 type pkcs11PrivateKey struct {
 	pkcs11Object
 
-	// pubKeyHandle is a keyHandle to the public key.
-	pubKeyHandle pkcs11.ObjectHandle
-
 	// pubKey is an exported copy of the public key. We pre-export the key material because crypto.Signer.Public
 	// doesn't allow us to return errors.
 	pubKey crypto.PublicKey
+
+	// pubKeyHandle is a keyHandle to the public key.
+	pubKeyHandle pkcs11.ObjectHandle
 }
 
 // Delete implements Signer.Delete.
@@ -168,19 +168,19 @@ func (k *pkcs11PrivateKey) Delete() error {
 //
 // All functions, except Close, are safe to call from multiple goroutines.
 type Context struct {
-	// Atomic fields must be at top (according to the package owners)
-	closed pool.AtomicBool
-
 	ctx moduleCtx
 	cfg *Config
 
 	token *pkcs11.TokenInfo
-	slot  uint
 	pool  *pool.ResourcePool
+
+	slot uint
 
 	// persistentSession is a session held open so we can be confident handles and login status
 	// persist for the duration of this context
 	persistentSession pkcs11.SessionHandle
+	// Atomic fields must be at top (according to the package owners)
+	closed pool.AtomicBool
 }
 
 // Signer is a PKCS#11 key that implements crypto.Signer.
@@ -252,6 +252,10 @@ func (c *Context) findToken(slots []uint, serial, label string, slotNumber *int)
 //
 // Supply this to Configure(), or alternatively use ConfigureFromFile().
 type Config struct {
+
+	// SlotNumber identifies a token to use by the slot containing it.
+	SlotNumber *int
+
 	// Full path to PKCS#11 library.
 	Path string
 
@@ -260,9 +264,6 @@ type Config struct {
 
 	// Token label.
 	TokenLabel string
-
-	// SlotNumber identifies a token to use by the slot containing it.
-	SlotNumber *int
 
 	// User PIN (password).
 	Pin string
@@ -277,6 +278,12 @@ type Config struct {
 	// Maximum time to wait for a session from the sessions pool. Zero means wait indefinitely.
 	PoolWaitTimeout time.Duration
 
+	// GCMIVLength is the length of IVs to use in GCM mode. Refer to NIST SP800-38 for guidance on the length of
+	// RBG-based IVs in GCM mode. When the UseGCMIVFromHSM parameter is true
+	GCMIVLength int
+
+	GCMIVFromHSMControl GCMIVFromHSMConfig
+
 	// LoginNotSupported should be set to true for tokens that do not support logging in.
 	LoginNotSupported bool
 
@@ -285,12 +292,6 @@ type Config struct {
 	// If UseGCMIVFromHSM is true, we will copy this IV and overwrite the 'nonce' slice passed to Seal and Open. It
 	// is therefore necessary that the nonce is the correct length (12 bytes for CloudHSM).
 	UseGCMIVFromHSM bool
-
-	// GCMIVLength is the length of IVs to use in GCM mode. Refer to NIST SP800-38 for guidance on the length of
-	// RBG-based IVs in GCM mode. When the UseGCMIVFromHSM parameter is true
-	GCMIVLength int
-
-	GCMIVFromHSMControl GCMIVFromHSMConfig
 }
 
 type GCMIVFromHSMConfig struct {

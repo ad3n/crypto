@@ -538,9 +538,7 @@ func signPSS(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, op
 	}
 	// TODO this is pretty horrible, maybe the PKCS#11 wrapper
 	// could be improved to help us out here
-	parameters := concat(ulongToBytes(hMech),
-		ulongToBytes(mgf),
-		ulongToBytes(sLen))
+	parameters := ulongsToBytes(hMech, mgf, sLen)
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_PSS, parameters)}
 	if err = session.ctx.SignInit(session.handle, mech, key.handle); err != nil {
 		return nil, err
@@ -583,9 +581,9 @@ func signPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byt
 // implementation may impose further restrictions.
 func (priv *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	err = priv.context.withSession(func(session *pkcs11Session) error {
-		switch opts.(type) {
+		switch opts := opts.(type) {
 		case *rsa.PSSOptions:
-			signature, err = signPSS(session, priv, digest, opts.(*rsa.PSSOptions))
+			signature, err = signPSS(session, priv, digest, opts)
 		default: /* PKCS1-v1_5 */
 			signature, err = signPKCS1v15(session, priv, digest, opts.HashFunc())
 		}

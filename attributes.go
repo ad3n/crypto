@@ -22,7 +22,6 @@
 package crypto11
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -35,7 +34,7 @@ type AttributeType = uint
 // Attribute represents a PKCS#11 CK_ATTRIBUTE type.
 type Attribute = pkcs11.Attribute
 
-//noinspection GoUnusedConst,GoDeprecation
+// noinspection GoUnusedConst,GoDeprecation
 const (
 	CkaClass                  = AttributeType(0x00000000)
 	CkaToken                  = AttributeType(0x00000001)
@@ -170,11 +169,11 @@ const (
 
 // NewAttribute is a helper function that populates a new Attribute for common data types. This function will
 // return an error if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func NewAttribute(attributeType AttributeType, value interface{}) (a *Attribute, err error) {
+func NewAttribute(attributeType AttributeType, value any) (a *Attribute, err error) {
 	// catch any panics from the pkcs11.NewAttribute() call to keyHandle the error cleanly
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.New(fmt.Sprintf("failed creating Attribute: %v", r))
+			err = fmt.Errorf("failed creating Attribute: %v", r)
 		}
 	}()
 
@@ -185,7 +184,7 @@ func NewAttribute(attributeType AttributeType, value interface{}) (a *Attribute,
 // CopyAttribute returns a deep copy of the given Attribute.
 func CopyAttribute(a *Attribute) *Attribute {
 	var value []byte
-	if a.Value != nil && len(a.Value) > 0 {
+	if len(a.Value) > 0 {
 		value = append([]byte(nil), a.Value...)
 	}
 	return &pkcs11.Attribute{
@@ -204,7 +203,7 @@ func NewAttributeSet() AttributeSet {
 
 // Set stores a new attribute in the AttributeSet. Any existing value will be overwritten. This function will return an
 // error if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func (a AttributeSet) Set(attributeType AttributeType, value interface{}) error {
+func (a AttributeSet) Set(attributeType AttributeType, value any) error {
 	attr, err := NewAttribute(attributeType, value)
 	if err != nil {
 		return err
@@ -238,7 +237,7 @@ func (a AttributeSet) AddIfNotPresent(additional []*Attribute) {
 
 // ToSlice returns a deep copy of Attributes contained in the AttributeSet.
 func (a AttributeSet) ToSlice() []*Attribute {
-	var attributes []*Attribute
+	attributes := make([]*Attribute, 0, len(a))
 	for _, v := range a {
 		duplicateAttr := CopyAttribute(v)
 		attributes = append(attributes, duplicateAttr)
@@ -249,7 +248,7 @@ func (a AttributeSet) ToSlice() []*Attribute {
 // Copy returns a deep copy of the AttributeSet. This function will return an error if value is not of type
 // bool, int, uint, string, []byte or time.Time (or is nil).
 func (a AttributeSet) Copy() AttributeSet {
-	b := NewAttributeSet()
+	b := make(AttributeSet, len(a))
 	for _, v := range a {
 		b[v.Type] = CopyAttribute(v)
 	}

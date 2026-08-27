@@ -47,13 +47,13 @@ var errBadGCMNonceSize = errors.New("nonce slice too small to hold IV")
 type genericAead struct {
 	key *SecretKey
 
-	overhead int
-
-	nonceSize int
-
 	// Note - if the GCMParams result is non-nil, the caller must call Free() on the params when
 	// finished.
 	makeMech func(nonce []byte, additionalData []byte, encrypt bool) ([]*pkcs11.Mechanism, *pkcs11.GCMParams, error)
+
+	overhead int
+
+	nonceSize int
 }
 
 // NewGCM returns a given cipher wrapped in Galois Counter Mode, with the standard

@@ -1,8 +1,6 @@
 module github.com/ad3n/crypto
 
-go 1.25.0
-
-toolchain go1.25.8
+go 1.26.0
 
 require (
 	github.com/miekg/pkcs11 v1.1.2
