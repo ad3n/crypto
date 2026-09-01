@@ -69,6 +69,16 @@ func findKeysWithAttributes(session *pkcs11Session, template []*pkcs11.Attribute
 // Find key objects.  For asymmetric keys this only finds one half so
 // callers will call it twice. Returns nil if the key does not exist on the token.
 func findKeys(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (handles []pkcs11.ObjectHandle, err error) {
+	template := keySearchTemplate(id, label, keyclass, keytype)
+
+	if handles, err = findKeysWithAttributes(session, template); err != nil {
+		return nil, err
+	}
+
+	return handles, nil
+}
+
+func keySearchTemplate(id []byte, label []byte, keyclass *uint, keytype *uint) []*pkcs11.Attribute {
 	template := make([]*pkcs11.Attribute, 0, 4)
 
 	if keyclass != nil {
@@ -84,17 +94,28 @@ func findKeys(session *pkcs11Session, id []byte, label []byte, keyclass *uint, k
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
 	}
 
-	if handles, err = findKeysWithAttributes(session, template); err != nil {
-		return nil, err
-	}
-
-	return handles, nil
+	return template
 }
 
 // Find a key object.  For asymmetric keys this only finds one half so
 // callers will call it twice. Returns nil if the key does not exist on the token.
 func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (obj *pkcs11.ObjectHandle, err error) {
-	handles, err := findKeys(session, id, label, keyclass, keytype)
+	template := keySearchTemplate(id, label, keyclass, keytype)
+	return findFirstKeyWithAttributes(session, template)
+}
+
+func findFirstKeyWithAttributes(session *pkcs11Session, template []*pkcs11.Attribute) (obj *pkcs11.ObjectHandle, err error) {
+	if err = session.ctx.FindObjectsInit(session.handle, template); err != nil {
+		return nil, err
+	}
+	defer func() {
+		finalErr := session.ctx.FindObjectsFinal(session.handle)
+		if err == nil {
+			err = finalErr
+		}
+	}()
+
+	handles, _, err := session.ctx.FindObjects(session.handle, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -399,16 +420,32 @@ func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
 		return nil, errClosed
 	}
 
-	result, err := c.FindKeys(id, label)
+	if len(id) == 0 && len(label) == 0 {
+		return nil, errors.New("id and label cannot both be empty")
+	}
+
+	attributes := NewAttributeSet()
+	if len(id) > 0 {
+		if err := attributes.Set(CkaId, id); err != nil {
+			return nil, err
+		}
+	}
+	if len(label) > 0 {
+		if err := attributes.Set(CkaLabel, label); err != nil {
+			return nil, err
+		}
+	}
+
+	result, err := c.findKeyWithAttributes(attributes)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(result) == 0 {
+	if result == nil {
 		return nil, fmt.Errorf("key with id=%x and label=%x was not found or is empty", id, label)
 	}
 
-	return result[0], nil
+	return result, nil
 }
 
 // FindKeys retrieves all matching symmetric keys, or a nil slice if none can be found.
@@ -447,16 +484,49 @@ func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, er
 		return nil, errClosed
 	}
 
-	result, err := c.FindKeysWithAttributes(attributes)
+	result, err := c.findKeyWithAttributes(attributes)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(result) == 0 {
+	if result == nil {
 		return nil, fmt.Errorf("key with attributes=%v was not found or is empty", attributes)
 	}
 
-	return result[0], nil
+	return result, nil
+}
+
+func (c *Context) findKeyWithAttributes(attributes AttributeSet) (key *SecretKey, err error) {
+	if _, ok := attributes[CkaClass]; ok {
+		return nil, errors.Errorf("key attribute set must not contain CkaClass")
+	}
+
+	err = c.withSession(func(session *pkcs11Session) error {
+		searchAttributes := attributes.Copy()
+		if err := searchAttributes.Set(CkaClass, pkcs11.CKO_SECRET_KEY); err != nil {
+			return err
+		}
+
+		handle, err := findFirstKeyWithAttributes(session, searchAttributes.ToSlice())
+		if err != nil || handle == nil {
+			return err
+		}
+
+		keyTypeAttributes := []*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0)}
+		keyTypeAttributes, err = session.ctx.GetAttributeValue(session.handle, *handle, keyTypeAttributes)
+		if err != nil {
+			return err
+		}
+
+		keyType := bytesToUlong(keyTypeAttributes[0].Value)
+		cipher, ok := Ciphers[int(keyType)]
+		if !ok {
+			return errors.Errorf("unsupported key type: %X", keyType)
+		}
+		key = &SecretKey{pkcs11Object{*handle, c}, cipher}
+		return nil
+	})
+	return key, err
 }
 
 // FindKeysWithAttributes retrieves previously created symmetric keys, or a nil slice if none can be found.

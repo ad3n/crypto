@@ -67,6 +67,17 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
+		// The singular API must preserve the old contract of returning one of
+		// the same matches without mutating the caller's attribute set.
+		first, err := ctx.FindKeyWithAttributes(attrs)
+		require.NoError(t, err)
+		require.NotNil(t, first)
+		require.NotContains(t, attrs, CkaClass)
+		require.True(t,
+			first.handle == keys[0].handle || first.handle == keys[1].handle,
+			"singular lookup returned a key outside the plural result set",
+		)
+
 		attrs = NewAttributeSet()
 		err = attrs.Set(CkaValueLen, 16)
 		require.NoError(t, err)
