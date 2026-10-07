@@ -1,31 +1,15 @@
-// Copyright 2024 Thales Group
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// SPDX-FileCopyrightText: 2026 Thales Group and the crypto11 Contributors
+// SPDX-FileCopyrightText: 2026 The Eclipse Foundation KeyPont project maintainers
+// SPDX-License-Identifier: MIT
 
 package crypto11
 
 import (
 	"crypto/cipher"
+	"errors"
 	"runtime"
 
-	"github.com/miekg/pkcs11"
+	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
 )
 
 // cipher.BlockMode -----------------------------------------------------
@@ -93,14 +77,15 @@ type blockModeCloser struct {
 	// PKCS#11 session to use
 	session *pkcs11Session
 
-	// Cleanup function
-	cleanup func()
-
 	// Cipher block size
 	blockSize int
 
 	// modeDecrypt or modeEncrypt
 	mode int
+
+	// Cleanup function. It takes the error the operation ended with, so that
+	// a session the token declared dead is discarded rather than pooled.
+	cleanup func(err error)
 }
 
 // newBlockModeCloser creates a new blockModeCloser for the chosen mechanism and mode.
@@ -115,11 +100,11 @@ func (key *SecretKey) newBlockModeCloser(mech uint, mode int, iv []byte, setFina
 		session:   session,
 		blockSize: key.Cipher.BlockSize,
 		mode:      mode,
-		cleanup: func() {
-			key.context.pool.Put(session)
+		cleanup: func(err error) {
+			key.context.putSession(session, err)
 		},
 	}
-	mechDescription := []*pkcs11.Mechanism{pkcs11.NewMechanism(mech, iv)}
+	mechDescription := pkcs11.NewMechanism(mech, iv)
 
 	switch mode {
 	case modeDecrypt:
@@ -130,7 +115,7 @@ func (key *SecretKey) newBlockModeCloser(mech uint, mode int, iv []byte, setFina
 		panic("unexpected mode")
 	}
 	if err != nil {
-		bmc.cleanup()
+		bmc.cleanup(err)
 		return nil, err
 	}
 	if setFinalizer {
@@ -140,8 +125,13 @@ func (key *SecretKey) newBlockModeCloser(mech uint, mode int, iv []byte, setFina
 	return bmc, nil
 }
 
-func finalizeBlockModeCloser(obj *blockModeCloser) {
-	obj.Close()
+// finalizeBlockModeCloser is the runtime finalizer for block modes created
+// without a Closer. It must never panic: a panic on the finalizer goroutine
+// cannot be recovered by the application, so a token that fails C_*Final on an
+// abandoned block mode would otherwise take the whole process down. The error
+// has no one to go to and is dropped; the session is still released.
+func finalizeBlockModeCloser(obj interface{}) {
+	_ = obj.(*blockModeCloser).close()
 }
 
 func (bmc *blockModeCloser) BlockSize() int {
@@ -164,8 +154,18 @@ func (bmc *blockModeCloser) CryptBlocks(dst, src []byte) {
 		result, err = bmc.session.ctx.EncryptUpdate(bmc.session.handle, src)
 	}
 	if err != nil {
+		// The operation is dead; nothing will reach Close for this block mode
+		// in a way that helps. Release the session before panicking, or it —
+		// and the Context's read lock — would be held until the finalizer
+		// runs, if it ever does.
+		bmc.session = nil
+		bmc.cleanup(err)
 		panic(err)
 	}
+	// The binding's buffer is a second copy of the output — plaintext, in
+	// decrypt mode — that the caller cannot reach to clear. Wipe it once it
+	// has been copied out, on the panic paths too.
+	defer pkcs11.Wipe(result)
 	// PKCS#11 2.40 s5.2 says that the operation must produce as much output
 	// as possible, so we should never have less than we submitted for CBC.
 	// This could be different for other modes but we don't implement any yet.
@@ -176,9 +176,20 @@ func (bmc *blockModeCloser) CryptBlocks(dst, src []byte) {
 	runtime.KeepAlive(bmc)
 }
 
+// Close finalizes the operation and releases the session. A token error, or
+// output where CBC can have none, is a panic: cipher.BlockMode has no way to
+// return an error, and silently dropping either would hide a broken operation.
 func (bmc *blockModeCloser) Close() {
+	if err := bmc.close(); err != nil {
+		panic(err)
+	}
+}
+
+// close is the error-returning teardown shared by Close and the runtime
+// finalizer. It is idempotent.
+func (bmc *blockModeCloser) close() error {
 	if bmc.session == nil {
-		return
+		return nil
 	}
 	var result []byte
 	var err error
@@ -189,14 +200,16 @@ func (bmc *blockModeCloser) Close() {
 		result, err = bmc.session.ctx.EncryptFinal(bmc.session.handle)
 	}
 	bmc.session = nil
-	bmc.cleanup()
+	bmc.cleanup(err)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	// PKCS#11 2.40 s5.2 says that the operation must produce as much output
 	// as possible, so we should never have any left over for CBC.
 	// This could be different for other modes but we don't implement any yet.
 	if len(result) > 0 {
-		panic("nontrivial result from *Final operation")
+		pkcs11.Wipe(result)
+		return errors.New("nontrivial result from *Final operation")
 	}
+	return nil
 }
