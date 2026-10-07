@@ -1,85 +1,23 @@
-// Copyright 2024 Thales Group
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// SPDX-FileCopyrightText: 2026 Thales Group and the crypto11 Contributors
+// SPDX-FileCopyrightText: 2026 The Eclipse Foundation KeyPont project maintainers
+// SPDX-License-Identifier: MIT
 
 package crypto11
 
 import (
-	"C"
 	"encoding/asn1"
-	"encoding/binary"
+	"errors"
+	"fmt"
 	"math/big"
 
-	"github.com/miekg/pkcs11"
-	"github.com/pkg/errors"
+	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
 )
 
-func ulongToBytes(n uint) []byte {
-	result := make([]byte, C.sizeof_ulong)
-	putUlong(result, n)
-	return result
-}
-
-// ulongsToBytes encodes several CK_ULONG values with one allocation. PKCS#11
-// mechanism parameters are short-lived and must not be retained in a global
-// pool because they may contain cryptographic metadata.
-func ulongsToBytes(values ...uint) []byte {
-	size := int(C.sizeof_ulong)
-	result := make([]byte, size*len(values))
-	for i, value := range values {
-		putUlong(result[i*size:], value)
-	}
-	return result
-}
-
-func putUlong(dst []byte, n uint) {
-	switch C.sizeof_ulong {
-	case 4:
-		binary.NativeEndian.PutUint32(dst, uint32(n))
-	case 8:
-		binary.NativeEndian.PutUint64(dst, uint64(n))
-	default:
-		panic("unsupported CK_ULONG size")
-	}
-}
-
-func bytesToUlong(bs []byte) (n uint) {
-	if len(bs) == 0 {
-		return 0
-	}
-
-	// Attribute values can be shorter than CK_ULONG. Copying into a fixed-size
-	// local buffer avoids the out-of-bounds read performed by the old unsafe
-	// conversion while preserving native-endian PKCS#11 encoding.
-	size := min(len(bs), int(C.sizeof_ulong))
-	var buf [8]byte
-	copy(buf[:size], bs[:size])
-	switch C.sizeof_ulong {
-	case 4:
-		return uint(binary.NativeEndian.Uint32(buf[:4]))
-	case 8:
-		return uint(binary.NativeEndian.Uint64(buf[:8]))
-	default:
-		panic("unsupported CK_ULONG size")
-	}
-}
+// CK_ULONG conversions live in the pkcs11-go binding, as pkcs11.ULongToBytes
+// and pkcs11.BytesToULong. Its width is a property of the C ABI — 8 bytes under
+// LP64, 4 under Windows' LLP64 model — so it belongs in the one package that
+// holds the PKCS#11 headers. Keeping a copy here meant importing "C" for a
+// single constant, and getting it wrong on Windows.
 
 // Representation of a *DSA signature
 type dsaSignature struct {
@@ -101,7 +39,7 @@ func (sig *dsaSignature) unmarshalBytes(sigBytes []byte) error {
 // Populate a dsaSignature from DER encoding
 func (sig *dsaSignature) unmarshalDER(sigDER []byte) error {
 	if rest, err := asn1.Unmarshal(sigDER, sig); err != nil {
-		return errors.WithMessage(err, "DSA signature contains invalid ASN.1 data")
+		return fmt.Errorf("DSA signature contains invalid ASN.1 data: %w", err)
 	} else if len(rest) > 0 {
 		return errors.New("unexpected data found after DSA signature")
 	}
@@ -118,7 +56,7 @@ func (c *Context) dsaGeneric(key pkcs11.ObjectHandle, mechanism uint, digest []b
 	var err error
 	var sigBytes []byte
 	var sig dsaSignature
-	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(mechanism, nil)}
+	mech := pkcs11.NewMechanism(mechanism, nil)
 	err = c.withSession(func(session *pkcs11Session) error {
 		if err = c.ctx.SignInit(session.handle, mech, key); err != nil {
 			return err

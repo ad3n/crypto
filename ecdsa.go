@@ -1,23 +1,6 @@
-// Copyright 2024 Thales Group
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// SPDX-FileCopyrightText: 2026 Thales Group and the crypto11 Contributors
+// SPDX-FileCopyrightText: 2026 The Eclipse Foundation KeyPont project maintainers
+// SPDX-License-Identifier: MIT
 
 package crypto11
 
@@ -27,11 +10,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/asn1"
+	"errors"
+	"fmt"
 	"io"
 	"math/big"
 
-	"github.com/miekg/pkcs11"
-	"github.com/pkg/errors"
+	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
 )
 
 // errUnsupportedEllipticCurve is returned when an elliptic curve
@@ -54,17 +38,17 @@ type curveInfo struct {
 	curve elliptic.Curve
 }
 
-func (k *pkcs11PrivateKeyECDSA) KeyType() uint {
+func (signer *pkcs11PrivateKeyECDSA) KeyType() uint {
 	return pkcs11.CKK_ECDSA
 }
 
 // ASN.1 marshal some value and panic on error
-func mustMarshal(val any) []byte {
-	if b, err := asn1.Marshal(val); err != nil {
+func mustMarshal(val interface{}) []byte {
+	b, err := asn1.Marshal(val)
+	if err != nil {
 		panic(err)
-	} else {
-		return b
 	}
+	return b
 }
 
 // Note: some of these are outside what crypto/elliptic currently
@@ -166,7 +150,7 @@ func unmarshalEcPoint(b []byte, c elliptic.Curve) (*big.Int, *big.Int, error) {
 	var pointBytes []byte
 	extra, err := asn1.Unmarshal(b, &pointBytes)
 	if err != nil {
-		return nil, nil, errors.WithMessage(err, "elliptic curve point is invalid ASN.1")
+		return nil, nil, fmt.Errorf("elliptic curve point is invalid ASN.1: %w", err)
 	}
 
 	if len(extra) > 0 {
@@ -262,12 +246,24 @@ func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private AttributeSe
 		})
 		private.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, c.defaultPrivate()),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
 		})
 
-		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
+		// The curve the token is asked for is the CKA_EC_PARAMS actually sent —
+		// the caller may have put its own in the template — not necessarily the
+		// curve argument. It has to be one whose public key can be exported,
+		// since a Signer cannot be built without it: finding that out after
+		// C_GenerateKeyPair used to leave two token objects behind on every
+		// attempt.
+		requested, err := unmarshalEcParams(public[CkaEcParams].Value)
+		if err != nil {
+			return err
+		}
+
+		mech := pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)
 		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
 			mech,
 			public.ToSlice(),
@@ -278,7 +274,14 @@ func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private AttributeSe
 
 		pub, err := exportECDSAPublicKey(session, pubHandle)
 		if err != nil {
-			return err
+			return destroyKeyPair(session, pubHandle, privHandle, err)
+		}
+		// The token's answer is checked against the request: a key on a weaker
+		// curve than asked for would otherwise be reported as a success at the
+		// requested strength.
+		if got := pub.(*ecdsa.PublicKey).Curve; got.Params().Name != requested.Params().Name {
+			return destroyKeyPair(session, pubHandle, privHandle,
+				fmt.Errorf("token generated a key on %s where %s was requested", got.Params().Name, requested.Params().Name))
 		}
 		k = &pkcs11PrivateKeyECDSA{
 			pkcs11PrivateKey: pkcs11PrivateKey{
@@ -301,6 +304,6 @@ func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private AttributeSe
 // PKCS#11 expects to pick its own random data where necessary for signatures, so the rand argument is ignored.
 //
 // The return value is a DER-encoded byteblock.
-func (signer *pkcs11PrivateKeyECDSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (signer *pkcs11PrivateKeyECDSA) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
 	return signer.context.dsaGeneric(signer.handle, pkcs11.CKM_ECDSA, digest)
 }

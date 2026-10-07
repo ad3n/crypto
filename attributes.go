@@ -1,23 +1,6 @@
-// Copyright 2024 Thales Group
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// SPDX-FileCopyrightText: 2026 Thales Group and the crypto11 Contributors
+// SPDX-FileCopyrightText: 2026 The Eclipse Foundation KeyPont project maintainers
+// SPDX-License-Identifier: MIT
 
 package crypto11
 
@@ -25,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/miekg/pkcs11"
+	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
 )
 
 // AttributeType represents a PKCS#11 CK_ATTRIBUTE value.
@@ -165,6 +148,13 @@ const (
 	CkaDefaultCmsAttributes   = AttributeType(0x00000502)
 	CkaSupportedCmsAttributes = AttributeType(0x00000503)
 	CkaAllowedMechanisms      = ckfArrayAttribute | AttributeType(0x00000600)
+
+	/* new for v3.2 (PKCS#11 v3.2, KEM / post-quantum) */
+	CkaParameterSet        = AttributeType(0x0000061d)
+	CkaEncapsulateTemplate = AttributeType(0x0000062a)
+	CkaDecapsulateTemplate = AttributeType(0x0000062b)
+	CkaEncapsulate         = AttributeType(0x00000633)
+	CkaDecapsulate         = AttributeType(0x00000634)
 )
 
 // NewAttribute is a helper function that populates a new Attribute for common data types. This function will
@@ -261,12 +251,35 @@ func (a AttributeSet) Unset(attributeType AttributeType) {
 	delete(a, attributeType)
 }
 
+// String renders the set for logs and error messages. The values of
+// attributes that can carry key material are replaced by their length: a set
+// built to import a key, or read back with GetAttributes, may hold a secret
+// key's CKA_VALUE or an RSA private key's CRT components, and %v on it should
+// not put those in a log line.
 func (a AttributeSet) String() string {
 	result := new(strings.Builder)
 	for attr, value := range a {
+		if sensitiveAttribute(attr) {
+			_, _ = fmt.Fprintf(result, "%s: <redacted, %d bytes>\n", attributeTypeString(attr), len(value.Value))
+			continue
+		}
 		_, _ = fmt.Fprintf(result, "%s: %x\n", attributeTypeString(attr), value.Value)
 	}
 	return result.String()
+}
+
+// sensitiveAttribute reports whether an attribute's value may be key material.
+// CKA_VALUE is the value of a secret key and of a DSA, EC or ML-KEM private
+// key (it is also the DER of a certificate and the Y of a DSA public key, but
+// String cannot tell the object class, so it errs on the side of redaction);
+// the six others are the RSA private key's components. Vendor-defined
+// attributes are redacted as well, since nothing here knows what they hold.
+func sensitiveAttribute(attr AttributeType) bool {
+	switch attr {
+	case CkaValue, CkaPrivateExponent, CkaPrime1, CkaPrime2, CkaExponent1, CkaExponent2, CkaCoefficient:
+		return true
+	}
+	return attr >= pkcs11.CKA_VENDOR_DEFINED
 }
 
 // NewAttributeSetWithID is a helper function that populates a new slice of Attributes with the provided ID.
@@ -524,6 +537,18 @@ func attributeTypeString(a AttributeType) string {
 		return "CkaSupportedCmsAttributes"
 	case CkaAllowedMechanisms:
 		return "CkaAllowedMechanisms"
+
+	case CkaParameterSet:
+		return "CkaParameterSet"
+	case CkaEncapsulateTemplate:
+		return "CkaEncapsulateTemplate"
+	case CkaDecapsulateTemplate:
+		return "CkaDecapsulateTemplate"
+	case CkaEncapsulate:
+		return "CkaEncapsulate"
+	case CkaDecapsulate:
+		return "CkaDecapsulate"
+
 	default:
 		return "Unknown"
 	}
