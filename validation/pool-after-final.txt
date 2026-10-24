@@ -1,0 +1,16 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/ad3n/crypto/v2/internal/pool
+cpu: Apple M3 Pro
+BenchmarkIdleReuse/Serial-12         	   50894	     23593 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Serial-12         	   49898	     23584 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Serial-12         	   51121	     23288 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Serial-12         	   51514	     23645 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Serial-12         	   51787	     23283 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Contended-12      	  514845	      2698 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Contended-12      	  471913	      2388 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Contended-12      	  558813	      2070 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Contended-12      	  546927	      2152 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIdleReuse/Contended-12      	  543135	      2122 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/ad3n/crypto/v2/internal/pool	14.088s

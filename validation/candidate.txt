@@ -1,0 +1,38 @@
+# github.com/ad3n/crypto/v2.test
+ld: warning: duplicate -rpath '/Users/aden/nwrfcsdk/lib' ignored
+goos: darwin
+goarch: arm64
+pkg: github.com/ad3n/crypto/v2
+cpu: Apple M3 Pro
+BenchmarkCKULongEncoding/ReturnedSlice-12         	61235686	        18.55 ns/op	      16 B/op	       2 allocs/op
+BenchmarkCKULongEncoding/ReturnedSlice-12         	66568048	        18.63 ns/op	      16 B/op	       2 allocs/op
+BenchmarkCKULongEncoding/ReturnedSlice-12         	62276756	        19.39 ns/op	      16 B/op	       2 allocs/op
+BenchmarkCKULongEncoding/ReturnedSlice-12         	55197580	        22.48 ns/op	      16 B/op	       2 allocs/op
+BenchmarkCKULongEncoding/ReturnedSlice-12         	61955734	        18.42 ns/op	      16 B/op	       2 allocs/op
+BenchmarkCKULongDecoding-12                       	617519808	         1.977 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCKULongDecoding-12                       	585857281	         1.993 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCKULongDecoding-12                       	621963472	         1.948 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCKULongDecoding-12                       	617432959	         1.944 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCKULongDecoding-12                       	616649536	         1.936 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFindOne/FirstOnly-12                     	      46	  23420256 ns/op	   90072 B/op	      29 allocs/op
+BenchmarkFindOne/FirstOnly-12                     	      50	  23642202 ns/op	   90072 B/op	      29 allocs/op
+BenchmarkFindOne/FirstOnly-12                     	      50	  23375242 ns/op	   90072 B/op	      29 allocs/op
+BenchmarkFindOne/FirstOnly-12                     	      51	  23339984 ns/op	   90074 B/op	      29 allocs/op
+BenchmarkFindOne/FirstOnly-12                     	      50	  23511878 ns/op	   90072 B/op	      29 allocs/op
+BenchmarkFindOne/FetchAllLegacy-12                	      14	  81018753 ns/op	  280801 B/op	    8242 allocs/op
+BenchmarkFindOne/FetchAllLegacy-12                	      15	  77713744 ns/op	  280801 B/op	    8242 allocs/op
+BenchmarkFindOne/FetchAllLegacy-12                	      14	  79995497 ns/op	  280801 B/op	    8242 allocs/op
+BenchmarkFindOne/FetchAllLegacy-12                	      14	  96232932 ns/op	  280801 B/op	    8242 allocs/op
+BenchmarkFindOne/FetchAllLegacy-12                	      14	  86134568 ns/op	  280802 B/op	    8242 allocs/op
+BenchmarkRSAPSSSign-12                            	    1610	    742380 ns/op	   91552 B/op	      37 allocs/op
+BenchmarkRSAPSSSign-12                            	    1615	    745038 ns/op	   91552 B/op	      37 allocs/op
+BenchmarkRSAPSSSign-12                            	    1620	    747943 ns/op	   91552 B/op	      37 allocs/op
+BenchmarkRSAPSSSign-12                            	    1608	    745660 ns/op	   91552 B/op	      37 allocs/op
+BenchmarkRSAPSSSign-12                            	    1600	    764077 ns/op	   91552 B/op	      37 allocs/op
+BenchmarkAttributeSetCopy-12                      	 7501364	       157.9 ns/op	     384 B/op	       8 allocs/op
+BenchmarkAttributeSetCopy-12                      	 8071952	       148.4 ns/op	     384 B/op	       8 allocs/op
+BenchmarkAttributeSetCopy-12                      	 8205583	       149.2 ns/op	     384 B/op	       8 allocs/op
+BenchmarkAttributeSetCopy-12                      	 7873513	       152.1 ns/op	     384 B/op	       8 allocs/op
+BenchmarkAttributeSetCopy-12                      	 7939686	       150.8 ns/op	     384 B/op	       8 allocs/op
+PASS
+ok  	github.com/ad3n/crypto/v2	41.360s

@@ -25,6 +25,13 @@ func BenchmarkFindOne(b *testing.B) {
 
 	const objectCount = 1000
 	keys := make([]*SecretKey, 0, objectCount)
+	b.Cleanup(func() {
+		for _, key := range keys {
+			if err := key.Delete(); err != nil {
+				b.Error(err)
+			}
+		}
+	})
 	for i := range objectCount {
 		key, err := ctx.GenerateSecretKeyWithLabel(
 			[]byte(fmt.Sprintf("benchmark-find-one-id-%03d", i)),
@@ -37,11 +44,6 @@ func BenchmarkFindOne(b *testing.B) {
 		}
 		keys = append(keys, key)
 	}
-	b.Cleanup(func() {
-		for _, key := range keys {
-			_ = key.Delete()
-		}
-	})
 
 	attributes := NewAttributeSet()
 

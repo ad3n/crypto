@@ -1,23 +1,6 @@
-// Copyright 2024 Thales Group
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// SPDX-FileCopyrightText: 2026 Thales Group and the crypto11 Contributors
+// SPDX-FileCopyrightText: 2026 The Eclipse Foundation KeyPont project maintainers
+// SPDX-License-Identifier: MIT
 
 package crypto11
 
@@ -27,17 +10,12 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/miekg/pkcs11"
+	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHardSymmetric(t *testing.T) {
-	ctx, err := ConfigureFromFile("config")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	t.Run("AES128", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 128) })
 	t.Run("AES192", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 192) })
@@ -104,6 +82,13 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 			require.NoError(t, err)
 			skipIfMechUnsupported(t, key2.context, pkcs11.CKM_AES_GCM)
 			testAEADMode(t, aead, 127, 129)
+		})
+		t.Run("GCMHardEmptyPlaintext", func(t *testing.T) {
+			aead, err := key2.NewGCM()
+			require.NoError(t, err)
+			skipIfMechUnsupported(t, key2.context, pkcs11.CKM_AES_GCM)
+			// Associated data only: the ciphertext is the bare tag.
+			testAEADMode(t, aead, 0, 129)
 		})
 		// TODO check that hard/soft is consistent!
 	}
@@ -192,12 +177,7 @@ func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 }
 
 func BenchmarkCBC(b *testing.B) {
-	ctx, err := ConfigureFromFile("config")
-	require.NoError(b, err)
-
-	defer func() {
-		require.NoError(b, ctx.Close())
-	}()
+	ctx := testContext(b)
 
 	id := randomBytes()
 	key, err := ctx.GenerateSecretKey(id, 128, Ciphers[pkcs11.CKK_AES])
@@ -241,14 +221,9 @@ func BenchmarkCBC(b *testing.B) {
 }
 
 func TestSymmetricRequiredArgs(t *testing.T) {
-	ctx, err := ConfigureFromFile("config")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
-
-	_, err = ctx.GenerateSecretKey(nil, 128, CipherAES)
+	_, err := ctx.GenerateSecretKey(nil, 128, CipherAES)
 	require.Error(t, err)
 
 	val := randomBytes()
@@ -258,6 +233,40 @@ func TestSymmetricRequiredArgs(t *testing.T) {
 
 	_, err = ctx.GenerateSecretKeyWithLabel(val, nil, 128, CipherAES)
 	require.Error(t, err)
+}
+
+// TestHMACCiphersPreferStandardKeyGen pins the order the HMAC ciphers try key
+// generation in: the PKCS#11 v3.0 mechanism first, the nShield one next, the
+// generic-secret fallback last.
+func TestHMACCiphersPreferStandardKeyGen(t *testing.T) {
+	for _, c := range []struct {
+		cipher  *SymmetricCipher
+		keyType uint
+		keyGen  uint
+	}{
+		{CipherHMACSHA1, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_KEY_GEN},
+		{CipherHMACSHA224, pkcs11.CKK_SHA224_HMAC, pkcs11.CKM_SHA224_KEY_GEN},
+		{CipherHMACSHA256, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_KEY_GEN},
+		{CipherHMACSHA384, pkcs11.CKK_SHA384_HMAC, pkcs11.CKM_SHA384_KEY_GEN},
+		{CipherHMACSHA512, pkcs11.CKK_SHA512_HMAC, pkcs11.CKM_SHA512_KEY_GEN},
+	} {
+		params := c.cipher.GenParams
+		require.Len(t, params, 3)
+		require.Equal(t, SymmetricGenParams{KeyType: c.keyType, GenMech: c.keyGen}, params[0])
+		require.Equal(t, c.keyType, params[1].KeyType)
+		require.NotZero(t, params[1].GenMech&pkcs11.CKM_VENDOR_DEFINED, "second choice is the vendor mechanism")
+		require.Equal(t, SymmetricGenParams{KeyType: pkcs11.CKK_GENERIC_SECRET, GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN}, params[2])
+	}
+}
+
+// TestMechanismAvailable checks the probe key generation uses to skip
+// mechanisms a token does not have.
+func TestMechanismAvailable(t *testing.T) {
+	ctx := testContext(t)
+	skipIfMechUnsupported(t, ctx, pkcs11.CKM_AES_KEY_GEN)
+
+	require.True(t, ctx.mechanismAvailable(pkcs11.CKM_AES_KEY_GEN))
+	require.False(t, ctx.mechanismAvailable(pkcs11.CKM_VENDOR_DEFINED|0x0bad0bad), "a mechanism no token defines")
 }
 
 // TODO BenchmarkGCM along the same lines as above

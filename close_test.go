@@ -1,23 +1,6 @@
-// Copyright 2024 Thales Group
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// SPDX-FileCopyrightText: 2026 Thales Group and the crypto11 Contributors
+// SPDX-FileCopyrightText: 2026 The Eclipse Foundation KeyPont project maintainers
+// SPDX-License-Identifier: MIT
 
 package crypto11
 
@@ -26,16 +9,16 @@ import (
 	"crypto/elliptic"
 	"testing"
 
+	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestErrorAfterClosed(t *testing.T) {
-	ctx, err := ConfigureFromFile("config")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	err = ctx.Close()
+	err := ctx.Close()
 	require.NoError(t, err)
 
 	bytes := randomBytes()
@@ -82,6 +65,15 @@ func TestErrorAfterClosed(t *testing.T) {
 	_, err = ctx.GenerateECDSAKeyPairWithLabel(bytes, bytes, elliptic.P224())
 	assert.Equal(t, errClosed, err)
 
+	_, err = ctx.GenerateEd25519KeyPair(bytes)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GenerateEd25519KeyPairWithLabel(bytes, bytes)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GenerateEd25519KeyPairWithAttributes(NewAttributeSet(), NewAttributeSet())
+	assert.Equal(t, errClosed, err)
+
 	_, err = ctx.NewRandomReader()
 	assert.Equal(t, errClosed, err)
 
@@ -97,15 +89,18 @@ func TestErrorAfterClosed(t *testing.T) {
 
 	assert.Equal(t, errClosed, err)
 
-	_, err = ctx.GetAttribute(nil, CkaLabel)
+	_, err = ctx.FindCertificateChain(bytes, nil, nil)
 	assert.Equal(t, errClosed, err)
 
-	_, err = ctx.GetAttributes(nil, []AttributeType{CkaLabel})
+	_, err = ctx.GetAttribute(nil, pkcs11.CKA_LABEL)
 	assert.Equal(t, errClosed, err)
 
-	_, err = ctx.GetPubAttribute(nil, CkaLabel)
+	_, err = ctx.GetAttributes(nil, []AttributeType{pkcs11.CKA_LABEL})
 	assert.Equal(t, errClosed, err)
 
-	_, err = ctx.GetPubAttributes(nil, []AttributeType{CkaLabel})
+	_, err = ctx.GetPubAttribute(nil, pkcs11.CKA_LABEL)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GetPubAttributes(nil, []AttributeType{pkcs11.CKA_LABEL})
 	assert.Equal(t, errClosed, err)
 }
