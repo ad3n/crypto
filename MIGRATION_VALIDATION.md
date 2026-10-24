@@ -1,3 +1,5 @@
+> Historical validation of the initial vendored migration. The vendor limitation below is superseded by the direct fork dependency described in NOTICES.md. Old benchmark log files were subsequently removed.
+
 # API v2 migration validation
 
 Validated on 2026-10-24, Apple M3 Pro, darwin/arm64, Go 1.27.3, SoftHSM 2.7, default GOMAXPROCS=12.

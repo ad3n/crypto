@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"math/big"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // errAmbiguousPublicHalf is returned when the objects that match a private key by CKA_ID and

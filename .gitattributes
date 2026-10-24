@@ -1,3 +1,0 @@
-patches/*.patch -whitespace
-vendor/** -whitespace
-vendor/github.com/stretchr/testify/internal/spew/README.md conflict-marker-size=32

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 var errUnsupportedEdDSAOptions = errors.New("unsupported Ed25519 signing options: only pure Ed25519 is supported")

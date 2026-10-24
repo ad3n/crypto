@@ -4,7 +4,7 @@ This project uses the following third-party Go modules.
 
 | Package | License | License URL |
 |---------|---------|-------------|
-| `github.com/eclipse-keypont/pkcs11-go` | MIT | [Link](https://github.com/eclipse-keypont/pkcs11-go/blob/v1.2.0-rc4/LICENSE) |
+| `github.com/ad3n/pkcs11-go` | MIT | [Link](https://github.com/ad3n/pkcs11-go/blob/v1.2.0-rc4.ad3n.1/LICENSE) |
 
 ## Vendored source (in-tree)
 
@@ -14,11 +14,6 @@ The following code is copied directly into this repository and is not a Go modul
 |------|--------|---------|--------------|
 | `internal/pool` | `github.com/thales-e-security/pool` (extracted from `vitess.io/vitess`) | Apache-2.0 | [internal/pool/LICENSE](internal/pool/LICENSE) |
 
-## Local dependency patches
+## Patched binding dependency
 
-The checkout vendors dependencies listed in `vendor/modules.txt`, including their license files. `pkcs11-go v1.2.0-rc4` has two local changes, recorded in `patches/pkcs11-go-rc4.patch`:
-
-- On macOS, secret erasure uses the existing volatile-write fallback because the Apple SDK does not provide `explicit_bzero`.
-- CK_ULONG encoding uses native-endian Go writes with one owned allocation, preserving the binding's overflow rejection.
-
-Rebuild vendor sources with `go mod vendor`, then apply `git apply patches/pkcs11-go-rc4.patch`. The patch is required for this macOS checkout. Go consumers do not inherit a dependency's vendor directory; downstream module-mode users need a binding release/fork containing these fixes. This local merge does not publish such a release.
+The module directly requires `github.com/ad3n/pkcs11-go v1.2.0-rc4.ad3n.1`, forked from upstream rc4. It preserves one-allocation ULONG encoding and uses the volatile zeroization fallback on macOS. Attribution remains in the fork's LICENSE and NOTICE.md. No vendor directory or replace directive is required. See the fork's [patch report](https://github.com/ad3n/pkcs11-go/blob/v1.2.0-rc4.ad3n.1/FORK_PATCHES.md).

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // AttributeType represents a PKCS#11 CK_ATTRIBUTE value.
@@ -26,7 +26,7 @@ type Attribute = pkcs11.Attribute
 // binding's constants are untyped, so they can be passed anywhere an
 // AttributeType is expected.
 //
-// Deprecated: Use the CKA_* constants of github.com/eclipse-keypont/pkcs11-go/cryptoki,
+// Deprecated: Use the CKA_* constants of github.com/ad3n/pkcs11-go/cryptoki,
 // e.g. pkcs11.CKA_LABEL instead of CkaLabel.
 const (
 	CkaClass                  = AttributeType(pkcs11.CKA_CLASS)

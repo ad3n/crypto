@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"slices"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // MLKEMParameterSet identifies an ML-KEM security level as defined in FIPS 203.

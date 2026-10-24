@@ -7,7 +7,7 @@ package crypto11
 import (
 	"fmt"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // defaultPrivate returns the CKA_PRIVATE value applied to the private and secret

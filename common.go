@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"math/big"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // CK_ULONG conversions live in the pkcs11-go binding, as pkcs11.ULongToBytes

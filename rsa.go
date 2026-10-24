@@ -13,7 +13,7 @@ import (
 	"io"
 	"math/big"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // errMalformedRSAPublicKey is returned when an RSA public key is not in a suitable form.

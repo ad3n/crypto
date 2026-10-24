@@ -12,7 +12,7 @@ import (
 	"io"
 	"math/big"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // pkcs11PrivateKeyDSA contains a reference to a loaded PKCS#11 DSA private key object.

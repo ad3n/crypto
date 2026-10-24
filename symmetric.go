@@ -7,7 +7,7 @@ package crypto11
 import (
 	"errors"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // SymmetricGenParams holds a consistent (key type, mechanism) key generation pair.

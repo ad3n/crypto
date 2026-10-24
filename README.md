@@ -1,3 +1,5 @@
+> Binding dependency: `github.com/ad3n/pkcs11-go v1.2.0-rc4.ad3n.1`. Consumers importing binding types should use `github.com/ad3n/pkcs11-go/cryptoki`. No vendor or replace directive is needed.
+
 > This fork uses module `github.com/ad3n/crypto/v2`. Upstream project links below refer to Eclipse KeyPont. See `MIGRATION_VALIDATION.md` for the local optimization audit and validation.
 
 # Crypto11

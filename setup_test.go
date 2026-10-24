@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	pkcs11 "github.com/eclipse-keypont/pkcs11-go/cryptoki"
+	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
 )
 
 // TestMain optionally bootstraps an ephemeral SoftHSMv3 token before running
