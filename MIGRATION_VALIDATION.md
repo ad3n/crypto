@@ -1,3 +1,72 @@
+# Direct fork dependency validation — 2026-10-24
+
+The patch now lives in `github.com/ad3n/pkcs11-go v1.2.0-rc4.ad3n.1` (commit `c65f2f6`, branch `codex/portable-ulong`). Library implementation commit `46d28a5` was published to origin/master. All binding imports and the public Attribute alias now use `github.com/ad3n/pkcs11-go/cryptoki`. The vendor tree, local patch file, and vendor-specific attributes were removed. No replace directive is used. The C sanitizer test moved to the fork. Existing user removal of old benchmark log files was preserved.
+
+An independent consumer with a fresh GOMODCACHE downloaded both modules from proxy.golang.org, with no workspace override or local replacement:
+
+- crypto: `v2.0.0-20261024123157-46d28a5262ee`
+- binding: `v1.2.0-rc4.ad3n.1`
+
+`TestForkAttributeCompatibility` and `TestConsumerLookup` both passed under race detection and strict checkptr, including AES generation, singular/plural lookup and key cleanup on the isolated token. Reproduce with `sh scripts/check-consumer.sh 46d28a5`; set CRYPTO11_CONSUMER_CONFIG and SOFTHSM2_CONF to an isolated writable token for the integration case.
+
+## Commands and outcomes
+
+All of the following passed. SoftHSM tests use an automatically provisioned temporary token unless an explicit isolated benchmark/consumer config is supplied.
+
+```sh
+gofmt -w *.go
+gofmt -w testdata/consumer_test.go
+sh -n scripts/check-consumer.sh
+go mod tidy
+go mod verify
+go vet ./...
+git diff --check
+git diff --cached --check
+PKCS11_MODULE=/opt/homebrew/lib/softhsm/libsofthsm2.so go test ./...
+PKCS11_MODULE=/opt/homebrew/lib/softhsm/libsofthsm2.so go test -race ./...
+PKCS11_MODULE=/opt/homebrew/lib/softhsm/libsofthsm2.so go test -gcflags=all=-d=checkptr=2 ./...
+GOPROXY=https://proxy.golang.org GOMODCACHE=/private/tmp/crypto-fork-validation/consumer-cache SOFTHSM2_CONF=/private/tmp/crypto-v2-validation/softhsm.conf CRYPTO11_CONSUMER_CONFIG=/private/tmp/crypto-v2-validation/config.json sh scripts/check-consumer.sh 46d28a5
+```
+
+`betteralign ./...` and `betteralign -apply ./...` ran; unrelated automatic rewrites were reverted. The existing eight diagnostics documented in the historical report remain intentionally unresolved (public layout, positional literals, synchronization, or unrelated implementations). Final static checks use the restored layout. This is not a clean betteralign result.
+
+Fork validation: `go test ./...` without a token and `go vet ./...` passed. Unfiltered SoftHSM integration fails the upstream `TestIntegrationRSAOAEP`, which requires OAEP SHA-256 that this SoftHSM2 does not support (`CKR_ARGUMENTS_BAD`). The following passed, excluding exactly that case:
+
+```sh
+PKCS11_MODULE=/opt/homebrew/lib/softhsm/libsofthsm2.so go test -race -gcflags=all=-d=checkptr=2 -skip '^TestIntegrationRSAOAEP$' ./...
+cc -fsanitize=address,undefined -Icryptoki -Iinternal/headers testdata/memzero.c cryptoki/shim.c -o /private/tmp/crypto-fork-validation/memzero
+/private/tmp/crypto-fork-validation/memzero
+```
+
+The fork retains four pre-existing betteralign findings. See its FORK_PATCHES.md for all encoding benchmark samples and details. Hardware/network HSMs, PQC providers and other ABI/platform executions were not available. Full crypto11 tests retain the previously documented capability skips. The existing duplicate rpath linker warning does not prevent validation.
+
+## Performance and ownership
+
+Production implementations of lookup, RSA-PSS and session pooling are unchanged by vendor removal; import resolution now selects the published fork. The fork contains exactly the previous native-endian one-allocation ULONG encoder (including overflow rejection) and Apple volatile zeroization fallback. No new secret copies, pools or C pointer ownership changes are introduced. Decoder boundaries, returned-buffer independence and one-allocation encoding are regression-tested in the fork; crypto11's allocation/ownership tests also passed through the downloaded dependency.
+
+Before and after use the same Apple M3 Pro, Go 1.27.3 darwin/arm64, SoftHSM 2.7, default GOMAXPROCS=12 and 1-second benchmark duration, with five samples. Both runs used the same isolated configuration and 1,000 generated AES keys, cleaned up after setup; RSA-PSS uses RSA-2048/SHA-256 over a 1 KiB message. No validation workloads ran concurrently with benchmark measurements. The before tree has the vendored patch; after has the same patch through the fork. Median times show no regression, and allocation counts are identical. Benchstat is unavailable; small timing improvements are not claimed statistically significant or predictive of hardware HSM throughput.
+
+Command executed before and after:
+
+```sh
+SOFTHSM2_CONF=/private/tmp/crypto-v2-validation/softhsm.conf CRYPTO11_PROVISION=0 PKCS11_MODULE=/opt/homebrew/lib/softhsm/libsofthsm2.so CRYPTO11_BENCH_CONFIG=/private/tmp/crypto-v2-validation/config.json go test -run '^$' -bench 'Benchmark(FindOne|CKULong|RSAPSSSign|AttributeSetCopy)' -benchmem -count=5
+```
+
+All samples below are `ns/op / B/op / allocs/op`:
+
+| Benchmark | Vendored before (five samples) | Fork after (five samples) |
+|---|---|---|
+| CKULongEncoding/ReturnedSlice | 6.108 / 8 / 1; 6.105 / 8 / 1; 6.162 / 8 / 1; 6.219 / 8 / 1; 6.273 / 8 / 1 | 6.070 / 8 / 1; 6.061 / 8 / 1; 6.477 / 8 / 1; 5.942 / 8 / 1; 5.990 / 8 / 1 |
+| CKULongDecoding | 1.849 / 0 / 0; 1.807 / 0 / 0; 1.891 / 0 / 0; 1.835 / 0 / 0; 1.897 / 0 / 0 | 1.747 / 0 / 0; 1.793 / 0 / 0; 1.837 / 0 / 0; 1.800 / 0 / 0; 1.827 / 0 / 0 |
+| FindOne/FirstOnly | 24105674 / 304 / 17; 24060289 / 304 / 17; 24613399 / 304 / 17; 24724384 / 304 / 17; 24594593 / 304 / 17 | 23688577 / 304 / 17; 24035802 / 304 / 17; 24512217 / 304 / 17; 26117484 / 304 / 17; 23479762 / 304 / 17 |
+| FindOne/FetchAllLegacy | 83117863 / 183033 / 7230; 82258673 / 183033 / 7230; 80718318 / 183033 / 7230; 80454556 / 183033 / 7230; 81532009 / 183033 / 7230 | 77454488 / 183033 / 7230; 78458208 / 183032 / 7230; 78275176 / 183032 / 7230; 80473345 / 183032 / 7230; 78186955 / 183033 / 7230 |
+| RSAPSSSign | 743417 / 1792 / 26; 755891 / 1792 / 26; 741940 / 1792 / 26; 729870 / 1792 / 26; 731857 / 1792 / 26 | 720646 / 1792 / 26; 720685 / 1792 / 26; 744012 / 1792 / 26; 719882 / 1792 / 26; 721017 / 1792 / 26 |
+| AttributeSetCopy | 166.5 / 384 / 8; 147.1 / 384 / 8; 145.2 / 384 / 8; 151.7 / 384 / 8; 148.3 / 384 / 8 | 144.8 / 384 / 8; 144.5 / 384 / 8; 145.4 / 384 / 8; 145.0 / 384 / 8; 144.5 / 384 / 8 |
+
+Documentation and consumer-fixture additions do not modify the runtime path; the before/after benchmarks cover the dependency transition.
+
+---
+
 > Historical validation of the initial vendored migration. The vendor limitation below is superseded by the direct fork dependency described in NOTICES.md. Old benchmark log files were subsequently removed.
 
 # API v2 migration validation
