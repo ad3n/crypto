@@ -126,7 +126,7 @@ especially regarding symmetric crypto.
 
 # Installation
 
-crypto11 requires Go 1.25 or later (see the `go` directive in `go.mod`). Install the library by running:
+crypto11 is developed and tested with Go 1.27.3, pinned in `.go-version` and the `toolchain` directive. The minimum remains Go 1.25 to preserve consumer compatibility. Install the library by running:
 
 > **Note on Go version policy**
 >

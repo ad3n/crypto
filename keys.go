@@ -548,14 +548,18 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 	}
 
 	err := c.withSession(func(session *pkcs11Session) error {
-		// Add the private key class to the template to find the private half
 		privAttributes := attributes.Copy()
 		err := privAttributes.Set(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY)
 		if err != nil {
 			return err
 		}
 
-		privHandles, err := findKeysWithAttributes(session, privAttributes.ToSlice())
+		template := make([]*Attribute, 0, len(privAttributes))
+		for _, attribute := range privAttributes {
+			template = append(template, attribute)
+		}
+
+		privHandles, err := findKeysWithAttributes(session, template)
 		if err != nil {
 			return err
 		}
@@ -886,7 +890,11 @@ func (c *Context) findKeyWithAttributes(attributes AttributeSet) (key *SecretKey
 	}
 
 	err = c.withSession(func(session *pkcs11Session) (err error) {
-		template := attributes.ToSlice()
+		template := make([]*Attribute, 0, len(attributes)+1)
+		for _, attribute := range attributes {
+			template = append(template, CopyAttribute(attribute))
+		}
+
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY))
 		if err = session.ctx.FindObjectsInit(session.handle, template); err != nil {
 			return err
