@@ -5,7 +5,9 @@
 package crypto11
 
 import (
+	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	pkcs11 "github.com/ad3n/pkcs11-go/cryptoki"
@@ -259,21 +261,36 @@ func (a AttributeSet) Unset(attributeType AttributeType) {
 	delete(a, attributeType)
 }
 
-// String renders the set for logs and error messages, one attribute per line
-// under its CKA_ name (cryptoki.AttributeName). The values of attributes that
-// can carry key material are replaced by their length: a set
-// built to import a key, or read back with GetAttributes, may hold a secret
-// key's CKA_VALUE or an RSA private key's CRT components, and %v on it should
-// not put those in a log line.
 func (a AttributeSet) String() string {
-	result := new(strings.Builder)
+	if len(a) == 0 {
+		return ""
+	}
+
+	var result strings.Builder
+	var digits [20]byte
+	var encoded [512]byte
 	for attr, value := range a {
+		result.WriteString(pkcs11.AttributeName(attr))
+		result.WriteString(": ")
 		if sensitiveAttribute(attr) {
-			_, _ = fmt.Fprintf(result, "%s: <redacted, %d bytes>\n", pkcs11.AttributeName(attr), len(value.Value))
+			result.WriteString("<redacted, ")
+			result.Write(strconv.AppendInt(digits[:0], int64(len(value.Value)), 10))
+			result.WriteString(" bytes>\n")
 			continue
 		}
-		_, _ = fmt.Fprintf(result, "%s: %x\n", pkcs11.AttributeName(attr), value.Value)
+
+		result.Grow(hex.EncodedLen(len(value.Value)) + 1)
+		remaining := value.Value
+		for len(remaining) > 0 {
+			n := min(len(remaining), len(encoded)/2)
+			hex.Encode(encoded[:], remaining[:n])
+			result.Write(encoded[:2*n])
+			remaining = remaining[n:]
+		}
+
+		result.WriteByte('\n')
 	}
+
 	return result.String()
 }
 
