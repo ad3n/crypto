@@ -3,15 +3,6 @@
 All notable changes to crypto11 are documented in this file. For the full commit-level history see
 [GitHub Releases](https://github.com/eclipse-keypont/crypto11/releases).
 
-## Unreleased
-
-### Changed
-
-- Build and test toolchain bumped from `go1.27.2` to `go1.27.3` (`toolchain` directive in
-  `go.mod`, `.go-version`, and the version noted in `CONTRIBUTING.md`). go1.27.3 is a patch
-  release that fixes the `crypto/x509` standard-library vulnerability `GO-2026-6809`
-  ("distrust compromised intermediate certificates") flagged by `govulncheck` on go1.27.2.
-
 ## v2.0.0 — pkcs11-go, PKCS#11 v3.2 and ML-KEM
 
 v2 is a breaking release (hence the `/v2` module path) driven by three changes: the PKCS#11 binding
@@ -269,6 +260,10 @@ reporting or the Eclipse Foundation security team — and which versions receive
 
 ### Changed
 
+- Build and test toolchain bumped from `go1.27.2` to `go1.27.3` (`toolchain` directive in
+  `go.mod`, `.go-version`, and the version noted in `CONTRIBUTING.md`). go1.27.3 is a patch
+  release that fixes the `crypto/x509` standard-library vulnerability `GO-2026-6809`
+  ("distrust compromised intermediate certificates") flagged by `govulncheck` on go1.27.2.
 - **HMAC key generation tries the PKCS#11 v3.0 mechanisms first.** `CipherHMACSHA1` …
   `CipherHMACSHA512` now list `CKM_SHA_1_KEY_GEN` … `CKM_SHA512_KEY_GEN`, which v3.0
   standardised for `CKK_SHA*_HMAC` keys, ahead of the nShield vendor mechanisms and the
@@ -279,7 +274,7 @@ reporting or the Eclipse Foundation security team — and which versions receive
   else. The last pair is always tried, so the error a caller sees is still the token's own.
 - **crypto11 no longer contains any cgo of its own.** The `CK_ULONG` conversions were the last
   `import "C"` in the package; they now delegate to `cryptoki.ULongToBytes` / `cryptoki.BytesToULong`,
-  added in pkcs11-go v1.1.0. This release requires v1.2.0-rc4, which carries the binding's own
+  added in pkcs11-go v1.1.0. This release requires v1.2.0, which carries the binding's own
   fixes for the Synapse security findings
   ([eclipse-keypont/pkcs11-go#15](https://github.com/eclipse-keypont/pkcs11-go/pull/15)) and the
   consolidated security review of the `cryptoki` and `p11` packages (memory-safety, input-validation
